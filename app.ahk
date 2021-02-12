@@ -49,46 +49,61 @@ for _, value in A_Args {
 	}
 }
 
-;;Import and parse settings file
-FileRead, The_MemoryFile, % Settings_FilePath
-Settings := JSON.parse(The_MemoryFile)
-The_MemoryFile := ;blank
-; Array_Gui(Settings)
+;;Import and parse any settings files
+settingsFiles := fn_dirObj(A_ScriptDir "\*.json")
+for _, value in settingsFiles {
+	FileRead, theMemoryFile, % value
+	theSettings := JSON.parse(theMemoryFile)
+	theMemoryFile := ;blank
 
-;; Create Logging obj
-log := new Log_class(The_ProjectName "-" A_YYYY A_MM A_DD, Settings.logfiledir)
-log.maxNumbOldLogs_Default := -1 ; keep adding to 1 log per day
-log.application := The_ProjectName
-log.preEntryString := "%A_NowUTC% -- "
-log.initalizeNewLogFile(false, The_ProjectName " v" The_VersionNumb " log begins...`n")
-log.add(The_ProjectName " launched from user " A_UserName " on the machine " A_ComputerName ". Version: v" The_VersionNumb)
+	;/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\
+	; MAIN
+	;\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/
 
-;/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\
-; MAIN
-;\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/
-if (!DEBUG) {
-	data := sb_Parse(Settings)
-	sb_MoveFiles(data)
+	; if !DEBUG and settings file has parsing object
+	if (!DEBUG && theSettings.parsing) {
 
-	quitSeconds := 10
-	msg := "Completed all actions in settings. Exiting in " quitSeconds
-	Notify(The_ProjectName, msg)
-	log.add(msg)
-	sleep, % quitSeconds * 1000
-	log.finalizeLog()
-	ExitApp, 1
+		;; Create Logging obj
+		log := new Log_class(The_ProjectName "-" A_YYYY A_MM A_DD, theSettings.logfiledir)
+		log.maxNumbOldLogs_Default := -1 ; keep adding to 1 log per day
+		log.application := The_ProjectName
+		log.preEntryString := "%A_NowUTC% -- "
+		log.initalizeNewLogFile(false, The_ProjectName " v" The_VersionNumb " log begins...`n")
+		log.add(The_ProjectName " launched from user " A_UserName " on the machine " A_ComputerName ". Version: v" The_VersionNumb)
+
+		;; parse files
+		data := sb_Parse(theSettings)
+		; count number of files
+		if (size.data != 0) {
+			Notify(The_ProjectName, "performing actions on " A.size(data) " files", , "GC=black TC=White MC=White")
+			;; perform actions
+			sb_performActions(data)
+		}
+	}
 }
+quitSeconds := 10
+msg := "Completed all actions in settings. Exiting in " quitSeconds
+Notify(The_ProjectName, msg, , "GC=black TC=White MC=White")
+log.add(msg)
+sleep, % quitSeconds * 1000
+log.finalizeLog()
+ExitApp, 1
 
+;/--\--/--\--/--\--/--\--/--\--/--\--/--\
+; Top level functions
+;\--/--\--/--\--/--\--/--\--/--\--/--\--/
 
-sb_Parse(Settings)
+sb_Parse(param_settings)
 {
 	global log
 	array := []
 	log.add("Executing all setting parsers...")
 
-	Settings.exportPath := transformStringVars(Settings.exportPath)
-	if (Settings.parsing) {
-		for key, value in Settings.parsing {
+	; param_settings
+	param_settings.exportPath := transformStringVars(param_settings.exportPath)
+
+	if (param_settings.parsing) {
+		for key, value in param_settings.parsing {
 			;convert string in settings file to a fully qualifed var + string for searching
 			if (value.recursive) {
 				recursion := " R"
@@ -134,14 +149,11 @@ sb_Parse(Settings)
 ;/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\
 ; Move files
 ;\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/
-sb_MoveFiles(param_data)
+sb_performActions(param_data)
 {
 	if (Settings.exportPath) {
 		FileCreateDir(Settings.exportPath)
 	}
-
-	; count number of files
-	Notify("FilePidgin", "performing actions on " A.size(param_data) " files")
 
 	for key, value in param_data {
 		; delete
@@ -159,15 +171,9 @@ sb_MoveFiles(param_data)
 ;/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\
 ; Report Generation
 ;\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/
-; FileDelete, %Options_DBLocation%\DB.json
-; loop, % AllFiles_Array.MaxIndex() {
-	; BLANK ATM
-; }
-; FileAppend, %The_MemoryFile%, %Options_DBLocation%\DB.json
 
-;/--\--/--\--/--\--/--\--/--\--/--\--/--\
-; WrapUp
-;\--/--\--/--\--/--\--/--\--/--\--/--\--/
+
+
 sb_wrapup() {
 	if (Errors.MaxIndex() >= 1) {
 		msg := Errors.MaxIndex() " Errors were encountered. Check logfiles for details at " Settings.logfiledir
@@ -307,4 +313,18 @@ fileProperties(sFile:="") {
 		break
 	}
 	return l_data
+}
+
+
+fn_dirObj(param_dirPattern:="") {
+	if (param_dirPattern == "") {
+		param_dirPattern := A_LineFile
+	}
+
+	l_arr := []
+	Loop, %param_dirPattern%,
+	{
+		l_arr.push(A_LoopFileFullPath)
+	}
+	return l_arr
 }
