@@ -1,0 +1,15 @@
+{
+	"exportpath": "\\\\\\00 axcis\\ZIPPED\\%TOM_MM%-%TOM_DD%-%TOM_YY%\\",
+	"logfiledir": "C:\\TVG\\LogFiles\\",
+
+	"parsing": [
+		{
+			"name": "TEST",
+			"pattern": "\\\\10.209.2.60\\Incoming\\IT_Ops\\manual-pdfs\\*.pdf",
+			"recursive": true,
+			"age": "3d",
+			"association": "TEST",
+			"actions": ["delete"]
+		}
+	]
+}

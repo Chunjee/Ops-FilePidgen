@@ -1,0 +1,21 @@
+{
+	"name": "ops_filepidgin.ahk",
+	"version": "0.1.0",
+	"description": "Performs moving, deleting, renaming files",
+	"main": "app.ahk",
+	"dependencies": {
+		"array.ahk": "^0.1.8",
+		"biga.ahk": "^0.33.0",
+		"json.ahk": "chunjee/json.ahk",
+		"logs.ahk": "chunjee/logs.ahk",
+		"neutron.ahk": "chunjee/neutron.ahk",
+		"transformStringVars.ahk": "chunjee/transformStringVars.ahk",
+		"util-misc.ahk": "gist:cf6c862be8fa18c546d2fd67d86f84aa",
+		"wrappers.ahk": "chunjee/wrappers.ahk"
+	},
+	"devDependencies": {
+		"unit-testing.ahk": "^0.6.1"
+	},
+	"author": "Shawn Brooker",
+	"license": "MIT"
+}
