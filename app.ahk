@@ -41,15 +41,10 @@ A := new biga()
 
 ;Check for CommandLineArguments
 if (A.include(A_Args,"auto")) {
-	AUTOMODE := true
-}
-for _, value in A_Args {
-	if (fn_QuickRegEx(CL_Args[A_Index],"(\d{8})") != "") {
-		The_CustomDate := CL_Args[A_Index]
-	}
+
 }
 
-;;Import and parse any settings files
+;; Import and parse any settings files
 settingsFiles := fn_dirObj(A_ScriptDir "\*.json")
 for _, value in settingsFiles {
 	FileRead, theMemoryFile, % value
@@ -71,10 +66,13 @@ for _, value in settingsFiles {
 		log.initalizeNewLogFile(false, The_ProjectName " v" The_VersionNumb " log begins...`n")
 		log.add(The_ProjectName " launched from user " A_UserName " on the machine " A_ComputerName ". Version: v" The_VersionNumb)
 
+		; create legacy style global TOD_ TOM_ style variables - fix if possible
+		fn_globalDateFactory()
+		exportpath := transformStringVars(theSettings.exportpath)
 		;; parse files
 		data := sb_Parse(theSettings)
 		; count number of files
-		if (size.data != 0) {
+		if (A.size(data) != 0) {
 			Notify(The_ProjectName, "performing actions on " A.size(data) " files", , "GC=black TC=White MC=White")
 			;; perform actions
 			sb_performActions(data)
@@ -93,6 +91,11 @@ ExitApp, 1
 ; Top level functions
 ;\--/--\--/--\--/--\--/--\--/--\--/--\--/
 
+
+
+;/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\
+; Subroutines
+;\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/
 sb_Parse(param_settings)
 {
 	global log
@@ -100,10 +103,16 @@ sb_Parse(param_settings)
 	log.add("Executing all setting parsers...")
 
 	; param_settings
-	param_settings.exportPath := transformStringVars(param_settings.exportPath)
+	param_settings.exportPath := fn_globalReachTransform(param_settings.exportPath)
 
 	if (param_settings.parsing) {
 		for key, value in param_settings.parsing {
+
+			; quit if no pattern is defined
+			if (A.isUndefined(value.pattern)) {
+				return []
+			}
+
 			;convert string in settings file to a fully qualifed var + string for searching
 			if (value.recursive) {
 				recursion := " R"
@@ -119,20 +128,29 @@ sb_Parse(param_settings)
 			{
 				flag := false
 				item := fileProperties(A_LoopFilePath)
-				; msgbox, % A.print(item)
 
-				; modifed age
+				;; modifed age
 				if (value.age && A.includes(["d", "m", "h"], A.last(value.age))) {
 					ageTarget := A.parseInt(A.join(A.dropRight(value.age), ""))
 					if (fn_fileAge(A_Now, item.fileTimeC) > ageTarget, "days") {
 						flag := true
 					}
 				}
+				;; filename alone
+				; do not allow wildcard selection of delete files without age
+				if (A.isUndefined(value.age) && (!A.includes(value.actions, "delete"))) {
+					continue
+				}
+				if (A.includes(value.actions, "move")) {
+					flag := true
+					; transform moveto path if needed
+					value.moveto := fn_globalReachTransform(value.moveto)
+				}
 
-				; ACTION
+				;; ACTION
 				if (flag == true) {
-					array.push({"filePath": A_LoopFilePath, "actions": value.actions})
-					log.add(A_LoopFileName " Added to list of files")
+					array.push({"filePath": A_LoopFilePath, "actions": value.actions, "moveto:": value.moveto)
+					log.add(A_LoopFileName " Added to actionable files")
 				}
 			}
 		}
@@ -146,11 +164,10 @@ sb_Parse(param_settings)
 }
 
 
-;/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\
-; Move files
-;\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/
 sb_performActions(param_data)
 {
+	global log
+
 	if (Settings.exportPath) {
 		FileCreateDir(Settings.exportPath)
 	}
@@ -158,39 +175,18 @@ sb_performActions(param_data)
 	for key, value in param_data {
 		; delete
 		if (A.includes(value.actions, "delete")) {
-			msgbox, % A.print(value.actions)
-			log.add("Attempting to delete: " item.filename)
+			log.add("Attempting to delete: " item.filePath)
 			if (!FileDelete(value.filePath)) {
-				log.add("Error encountered when attempting to delete: " item.filename " (file in use, access denied, etc) Debug info: " Errorlevel)
+				log.add("Error encountered when attempting to delete: " item.filePath " (file in use, access denied, etc) Debug info: " Errorlevel)
 			}
+		}
+
+		; move files
+		if (A.includes(value.actions, "move")) {
+			; log.add("Attempting to move: " item.filePath)
 		}
 	}
 }
-
-
-;/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\
-; Report Generation
-;\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/
-
-
-
-sb_wrapup() {
-	if (Errors.MaxIndex() >= 1) {
-		msg := Errors.MaxIndex() " Errors were encountered. Check logfiles for details at " Settings.logfiledir
-		msg(msg)
-		log.add(msg, "ERROR")
-	} else {
-		log.add("All files moved without errors.")
-	}
-
-	;Wrap up logs and Exit
-	log.finalizeLog(The_ProjectName . " log ends.")
-	ExitApp, 0
-}
-
-;/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\
-; Subroutines
-;\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/
 
 
 
@@ -198,21 +194,10 @@ sb_wrapup() {
 ; Functions
 ;\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/
 
-;Gets the timestamp out of a filename and converts it into a day of the week name
-Fn_GetWeekName(para_String) ;Example Input: "20140730Scottsville"
-{
-	RegExMatch(para_String, "(\d{4})(\d{2})(\d{2})", RE_TimeStamp)
-	if (RE_TimeStamp1 != "") {
-		;dddd corresponds to Monday for example
-		FormatTime, l_WeekdayName , %RE_TimeStamp1%%RE_TimeStamp2%%RE_TimeStamp3%, dddd
-	}
-	if (l_WeekdayName != "") {
-		return l_WeekdayName
-	} else {
-		;throw error and return false if unsuccessful
-		throw error
-		return false
-	}
+fn_globalReachTransform(param_string){
+	global
+
+	return transformStringVars(param_string)
 }
 
 ;/--\--/--\--/--\--/--\--/--\
@@ -258,6 +243,45 @@ fn_timeDifference(param_time1, param_time2, param_unit:="seconds")
 	Diff := param_time2
 	Diff -= param_time1, %param_unit%
 	return Diff
+}
+
+fn_globalDateFactory(param_day:="", param_offset:=0) {
+	global
+
+	if (param_day == "") {
+		param_day := A_Now
+	}
+	param_day += param_offset, "days"
+
+	; create
+	; year
+	TOD_YYYY := FormatTime(param_day, "yyyy")
+	TOD_YY := FormatTime(param_day, "yy")
+
+	; month
+	TOD_MM := FormatTime(param_day, "MM")
+	TOD_M := FormatTime(param_day, "M")
+
+	; day
+	TOD_DD := FormatTime(param_day, "dd")
+	TOD_D := FormatTime(param_day, "d")
+
+
+	; legacy "tomorrow"
+	param_day += 1, "days"
+	; year
+	TOM_YYYY := FormatTime(param_day, "yyyy")
+	TOM_YY := FormatTime(param_day, "yy")
+
+	; month
+	TOM_MM := FormatTime(param_day, "MM")
+	TOM_M := FormatTime(param_day, "M")
+
+	; day
+	TOM_DD := FormatTime(param_day, "dd")
+	TOM_D := FormatTime(param_day, "d")
+
+	return
 }
 
 
