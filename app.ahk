@@ -1,7 +1,7 @@
 ;/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\
 ; Description
 ;\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/--\--/
-; Performs moving, deleting, renaming files
+; Performs moving, deleting, copying, renaming files
 
 ;~~~~~~~~~~~~~~~~~~~~~
 ;Compile Options
@@ -60,7 +60,7 @@ for _, value in settingsFiles {
 
 		;; Create Logging obj
 		log := new Log_class(The_ProjectName "-" A_YYYY A_MM A_DD, theSettings.logfiledir)
-		log.maxNumbOldLogs_Default := -1 ; keep adding to 1 log per day
+		log.maxNumbOldLogs_Default := 0 ; keep adding to the same log per day
 		log.application := The_ProjectName
 		log.preEntryString := "%A_NowUTC% -- "
 		log.initalizeNewLogFile(false, The_ProjectName " v" The_VersionNumb " log begins...`n")
@@ -73,6 +73,10 @@ for _, value in settingsFiles {
 		data := sb_Parse(theSettings)
 		; count number of files
 		if (A.size(data) != 0) {
+			; export list of files being worked on
+			exportList := A.join(A.pick(data, ["filePath", "actions"]), "`n")
+			dateObj := fn_globalDateFactory()
+			FileAppend, %exportList% "`n", % logfiledir The_ProjectName "-" dateObj.YYYY dateObj.MM dateObj.DD "-files.log"
 			Notify(The_ProjectName, "performing actions on " A.size(data) " files", , "GC=black TC=White MC=White")
 			;; perform actions
 			sb_performActions(data)
@@ -149,7 +153,7 @@ sb_Parse(param_settings)
 
 				;; ACTION
 				if (flag == true) {
-					array.push({"filePath": A_LoopFilePath, "actions": value.actions, "moveto:": value.moveto)
+					array.push({"filePath": A_LoopFilePath, "actions": value.actions, "moveto:": value.moveto})
 					log.add(A_LoopFileName " Added to actionable files")
 				}
 			}
@@ -182,7 +186,14 @@ sb_performActions(param_data)
 		}
 
 		; move files
-		if (A.includes(value.actions, "move")) {
+		if (A.includes(value.actions, "move") && A.size(value.moveto) > 3) {
+			FileMove(value.filePath, moveto)
+			; log.add("Attempting to move: " item.filePath)
+		}
+
+		; copy files
+		if (A.includes(value.actions, "copy") && A.size(value.moveto) > 3) {
+			FileMove(value.filePath, moveto)
 			; log.add("Attempting to move: " item.filePath)
 		}
 	}
